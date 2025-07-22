@@ -24,25 +24,25 @@ app.get('/status', (req, res) => {
 
 app.get('/data', async (req, res) => {
   try {
-    const [users] = await db.promise().query('SELECT * FROM users')
+    const [users] = await db.promise().query('SELECT * FROM user')
 
     const userData = await Promise.all(users.map(async (user) => {
       const [gps] = await db.promise().query(
-        'SELECT lat, lng, currenttime AS timestamp FROM gps WHERE userId = ?',
-        [user.userId]
+        'SELECT lat, lng, currentTime AS timestamp FROM gps WHERE uid = ?',
+        [user.uid]
       )
       const [u2b] = await db.promise().query(
-        'SELECT message AS text, currenttime AS timestamp FROM u2b WHERE userId = ?',
-        [user.userId]
+        'SELECT message AS text, currentTime AS timestamp FROM u2b WHERE uid = ?',
+        [user.uid]
       )
       const [b2u] = await db.promise().query(
-        'SELECT message AS text, currenttime AS timestamp FROM b2u WHERE userId = ?',
-        [user.userId]
+        'SELECT message AS text, currentTime AS timestamp FROM b2u WHERE uid = ?',
+        [user.uid]
       )
 
       return {
-        userId: user.userId,
-        userName: user.userName,
+        uid: user.uid,
+        uname: user.uname,
         gps,
         u2b,
         b2u

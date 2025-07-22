@@ -17,7 +17,7 @@ const useUserStore = create((set) => ({
     ]
   },
   {
-    userId: 'user2 rajun',
+    userId: 'user2 raju',
     gps: [
       { lat: 9.6615, lng: 80.0255, timestamp: 1718000000000 }, // Jaffna
       { lat: 8.5750, lng: 81.2290, timestamp: 1718000005000 }, // Trincomalee
