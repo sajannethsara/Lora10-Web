@@ -1,101 +1,94 @@
-
-
 import React, { useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
-// Mapbox token
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
+
+// Location pin SVG icon with customizable fill color
+const getLocationPinSVG = (fill = '#0D47A1') => `
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    width="30"
+    height="30"
+    fill="${fill}"
+    stroke="#ffffff"
+    stroke-width="2"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  >
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+    <circle cx="12" cy="9" r="2.5" fill="#ffffff"/>
+  </svg>
+`;
 
 const Mapbox = ({ users = [], highlightedUserId = null }) => {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
-  const markersRef = useRef({});              // Stores per-user markers
-  const lineLayerIdsRef = useRef([]);         // Stores added path layers
+  const markersRef = useRef({});
+  const lineLayerIdsRef = useRef([]);
   const styleLoadedRef = useRef(false);
 
-  // Initialize Map
   useEffect(() => {
     mapRef.current = new mapboxgl.Map({
       container: mapContainerRef.current,
-      style: 'mapbox://styles/mapbox/streets-v11',
+      style: 'mapbox://styles/mapbox/outdoors-v12',
       center: [80.6337, 7.8731],
-      zoom: 6,
+      zoom: 7,
     });
 
     mapRef.current.on('style.load', () => {
       styleLoadedRef.current = true;
     });
 
-    return () => {
-      mapRef.current?.remove();
-    };
+    return () => mapRef.current?.remove();
   }, []);
 
-  // Update map when users or highlighted user changes
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !styleLoadedRef.current) return;
 
-    // 🚮 Clear previous markers
-    Object.values(markersRef.current).forEach(markerArray => {
-      markerArray.forEach(marker => marker.remove());
-    });
+    // Remove old markers
+    Object.values(markersRef.current).forEach(arr => arr.forEach(m => m.remove()));
     markersRef.current = {};
 
-    // 🚮 Clear previous path layers
+    // Remove old lines
     lineLayerIdsRef.current.forEach(({ layerId, sourceId }) => {
       if (map.getLayer(layerId)) map.removeLayer(layerId);
       if (map.getSource(sourceId)) map.removeSource(sourceId);
     });
     lineLayerIdsRef.current = [];
 
-    // 🧭 Loop through users to draw markers and paths
     users.forEach(user => {
-      const { uid, gps = [] } = user;
+      const { userId, gps = [] } = user;
       if (!gps.length) return;
 
       const coordinates = gps.map(({ lng, lat }) => [lng, lat]);
+      const isHighlighted = userId === highlightedUserId;
 
-      // 📍 Add Markers for each point
-      /*const markerColor = userId === highlightedUserId ? '#1E3A8A' : '#93C5FD';
+      const pinColor = isHighlighted ? '#B71C1C' : '#0D47A1'; // Dark Red / Dark Blue
+      const lineColor = isHighlighted ? '#E53935' : '#1565C0'; // Bright Red / Deep Blue
 
+      // Create markers with custom SVG pins
       markersRef.current[userId] = gps.map(({ lat, lng }) => {
-        return new mapboxgl.Marker({ color: markerColor })
-          .setLngLat([lng, lat])
-          .addTo(map);
-      });*/ 
-      const markerColor = uid === highlightedUserId ? '#1E3A8A' : '#93C5FD';
-
-      markersRef.current[uid] = gps.map(({ lat, lng }) => {
         const el = document.createElement('div');
-        el.style.width = '14px';
-        el.style.height = '14px';
-        el.style.borderRadius = '50%';
-        el.style.backgroundColor = markerColor;
-        el.style.border = '2px solid white';
-        el.style.boxShadow = '0 0 4px rgba(0, 0, 0, 0.4)';
+        el.style.width = '30px';
+        el.style.height = '30px';
         el.style.cursor = 'pointer';
+        el.style.filter = 'drop-shadow(0 0 4px rgba(0, 0, 0, 0.4))';
+        el.innerHTML = getLocationPinSVG(pinColor);
+        return new mapboxgl.Marker(el).setLngLat([lng, lat]).addTo(map);
+      });
 
-        return new mapboxgl.Marker(el)
-    .setLngLat([lng, lat])
-    .addTo(map);
-});
-
-
-      // ➖ Draw Path (LineString)
-      const sourceId = `line-source-${uid}`;
-      const layerId = `line-layer-${uid}`;
+      const sourceId = `line-source-${userId}`;
+      const layerId = `line-layer-${userId}`;
 
       try {
         map.addSource(sourceId, {
           type: 'geojson',
           data: {
             type: 'Feature',
-            geometry: {
-              type: 'LineString',
-              coordinates: coordinates,
-            },
+            geometry: { type: 'LineString', coordinates },
           },
         });
 
@@ -103,20 +96,17 @@ const Mapbox = ({ users = [], highlightedUserId = null }) => {
           id: layerId,
           type: 'line',
           source: sourceId,
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round',
-          },
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
           paint: {
-            'line-color': uid === highlightedUserId ? '#1E3A8A' : '#0074D9',
-            'line-width': uid === highlightedUserId ? 5 : 3,
-            'line-opacity': uid === highlightedUserId ? 1 : 0.5,
+            'line-color': lineColor,
+            'line-width': isHighlighted ? 6 : 4,
+            'line-opacity': isHighlighted ? 0.95 : 0.75,
           },
         });
 
         lineLayerIdsRef.current.push({ layerId, sourceId });
       } catch (err) {
-        console.error(`Error adding layer for ${uid}:`, err);
+        console.error(`Error adding layer for ${userId}:`, err);
       }
     });
   }, [users, highlightedUserId]);
@@ -124,14 +114,10 @@ const Mapbox = ({ users = [], highlightedUserId = null }) => {
   return (
     <div
       ref={mapContainerRef}
-      className="w-full h-full rounded-xl shadow"
+      className="w-full h-full rounded-xl shadow-lg border border-blue-900"
+      style={{ minHeight: '400px' }}
     />
   );
 };
 
 export default Mapbox;
-
-
-
-
-

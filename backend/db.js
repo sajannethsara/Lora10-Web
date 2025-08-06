@@ -5,7 +5,7 @@ import mysql from 'mysql2'
 const connection = mysql.createConnection({
   host: 'localhost',         // Your DB host (usually localhost)
   user: 'root',              // Your MySQL username
-  password: 'MNnf2687967@', // Your MySQL password
+  password: '2003', // Your MySQL password
   database: 'lora10'  // Name of the database you created
 })
 

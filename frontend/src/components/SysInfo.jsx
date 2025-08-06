@@ -1,11 +1,10 @@
-
 import { useEffect } from 'react'
 import useSerialStore from '../stores/useSerialStore'
+import SessionSelector from './SessionSelector'
 
 function SysInfo() {
-  const isSerialConnected = useSerialStore(state => state.isSerialConnected)
- 
-  const updateStatus = useSerialStore(state => state.updateStatus)
+  const isSerialConnected = useSerialStore((state) => state.isSerialConnected)
+  const updateStatus = useSerialStore((state) => state.updateStatus)
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -28,36 +27,25 @@ function SysInfo() {
     return () => clearInterval(interval)
   }, [updateStatus])
 
-  /*return (
-    <div className={`h-20 ${isSerialConnected ? 'bg-green-400' : 'bg-red-400'} flex items-center justify-center`}>
-      <p>Status: {isSerialConnected ? 'Connected' : 'Not Connected'}</p>
-      
+  return (
+    <div className="w-full bg-gray-100 p-4 rounded-xl shadow flex flex-col gap-4">
+      {/* ESP32 Status box */}
+      <div className="inline-flex items-center border-2 border-gray-400 rounded-lg px-4 py-2">
+        <div
+          className={`h-5 w-5 rounded-full ${
+            isSerialConnected ? 'bg-green-500' : 'bg-red-500'
+          }`}
+          title={isSerialConnected ? 'Connected' : 'Not Connected'}
+        />
+        <span className="ml-3 font-semibold text-gray-800 text-lg whitespace-nowrap">
+          ESP32: {isSerialConnected ? 'Connected' : 'Not Connected'}
+        </span>
+      </div>
+
+      {/* Session selector below inside the same box */}
+      <SessionSelector />
     </div>
-  )*/ 
- return (
-  <div className="h-20 w-full bg-gray-200 flex items-center justify-center rounded-xl">
-    {/* Outer Div - Largest */}
-    
-    <div className="h-16 w-4/5 bg-gray-100 flex items-center justify-center rounded-xl">
-      {/* Middle Div - Medium */}
-      
-      <div className={`h-12 w-3/5 flex items-center justify-center rounded-md`}>
-  <button
-    className={`h-6 w-6 rounded-full ${isSerialConnected ? 'bg-green-500' : 'bg-red-500'}`}
-    title={isSerialConnected ? 'Connected' : 'Not Connected'}
-  />
-  <span className="ml-3 text-black font-semibold">
-    {isSerialConnected ? 'Connected' : 'Not Connected'}
-  </span>
-</div>
-
-
-    </div>
-  </div>
-);
-
-
-
+  )
 }
 
 export default SysInfo
