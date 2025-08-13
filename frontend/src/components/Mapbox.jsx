@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
+
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
 // Location pin SVG icon with customizable fill color
@@ -32,7 +33,7 @@ const Mapbox = ({ users = [], highlightedUserId = null }) => {
   useEffect(() => {
     mapRef.current = new mapboxgl.Map({
       container: mapContainerRef.current,
-      style: 'mapbox://styles/mapbox/outdoors-v12',
+      style: 'mapbox://styles/mapbox/dark-v11', // changed to dark map style
       center: [80.6337, 7.8731],
       zoom: 7,
     });
@@ -114,7 +115,7 @@ const Mapbox = ({ users = [], highlightedUserId = null }) => {
   return (
     <div
       ref={mapContainerRef}
-      className="w-full h-full rounded-xl shadow-lg border border-blue-900"
+      className="w-full h-full rounded-xl shadow-lg border border-blue-900 "
       style={{ minHeight: '400px' }}
     />
   );

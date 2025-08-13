@@ -31,7 +31,7 @@ const App = () => {
   return (
     <div className="bg-yellow-200 flex flex-1 h-screen w-full relative">
       {/* Left Panel */}
-      <div className="bg-red-200 flex-1 overflow-y-auto">
+      <div className="bg-[#353535] flex-1 overflow-y-auto">
         
         <SysInfo />
         <UserPanel

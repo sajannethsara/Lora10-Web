@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import useSerialStore from '../stores/useSerialStore'
 import SessionSelector from './SessionSelector'
+import usb from '../assets/usb-white.svg'
 
 function SysInfo() {
   const isSerialConnected = useSerialStore((state) => state.isSerialConnected)
@@ -28,7 +29,7 @@ function SysInfo() {
   }, [updateStatus])
 
   return (
-    <div className="w-full bg-gray-100 p-4 rounded-xl shadow flex flex-col gap-4">
+    <div className="w-full bg-[#353535] p-4 rounded-xl shadow flex flex-col gap-4">
       {/* ESP32 Status box */}
       <div className="inline-flex items-center border-2 border-gray-400 rounded-lg px-4 py-2">
         <div
@@ -37,8 +38,9 @@ function SysInfo() {
           }`}
           title={isSerialConnected ? 'Connected' : 'Not Connected'}
         />
-        <span className="ml-3 font-semibold text-gray-800 text-lg whitespace-nowrap">
-          ESP32: {isSerialConnected ? 'Connected' : 'Not Connected'}
+        <img className='ml-2' src={usb} alt="" height={20} width={20} />
+        <span className="ml-3 text-white whitespace-nowrap">
+          Base Station : {isSerialConnected ? 'Connected' : 'Not Connected'}
         </span>
       </div>
 
