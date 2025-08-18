@@ -1,20 +1,16 @@
 import express from 'express';
 import cors from 'cors';
 import db from './db.js';
-import { getSerialStatus, getLastESPData, sendToESP32 } from './SerialManager.js';
+import { getSerialStatus, sendToESP32 } from './SerialManager.js';
 
 const app = express();
 const port = 3000;
 
-// ✅ Middleware
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-/* -------------------------------------------------------------------------- */
-/*                                STATUS ROUTE                                */
-/* -------------------------------------------------------------------------- */
-
-// ✅ ESP32 Serial Connection Status
+/* ------------------------- STATUS ROUTE ------------------------- */
 app.get('/status', (req, res) => {
   try {
     const isSerialConnected = getSerialStatus();
@@ -24,86 +20,91 @@ app.get('/status', (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-// ✅ Get all session IDs
+
+/* ------------------------- SESSION ROUTES ------------------------- */
+// Get all session IDs
 app.get("/sessions", async (req, res) => {
   try {
     const [rows] = await db.promise().query(
       "SELECT sid FROM session ORDER BY sid ASC"
     );
-
-    // Send array like: [ { sid: 1 }, { sid: 2 }, ... ]
-    res.json(rows);
+    res.json(rows); // [{ sid: 1 }, { sid: 2 }, ...]
   } catch (error) {
-    console.error("❌ Error fetching all sessions:", error);
+    console.error("❌ Error fetching sessions:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
-// ✅ Add new session
+
+// Add new session
 app.post('/sessions', async (req, res) => {
   try {
     const [result] = await db.promise().query(
       "INSERT INTO session (dos, status) VALUES (NOW(), 'active')"
     );
-
-    const newSid = result.insertId;
-    res.status(201).json({ sid: newSid });
+    res.status(201).json({ sid: result.insertId });
   } catch (error) {
-    console.error("❌ Error adding new session:", error);
+    console.error("❌ Error adding session:", error);
     res.status(500).json({ error: "Failed to add session" });
   }
 });
 
-
-
-/* -------------------------------------------------------------------------- */
-/*                            FETCH SESSION & USER DATA                       */
-/* -------------------------------------------------------------------------- */
-
-// ✅ Fetch all user-related data for the latest session
-app.get('/data', async (req, res) => {
-  const inputSid = req.query.sid != null ? parseInt(req.query.sid) : null;
-  console.log("📥 Fetching data for session ID:", inputSid);
+// Get latest session ID
+app.get("/api/session/latest", async (req, res) => {
   try {
+    const [rows] = await db.promise().query(
+      "SELECT sid FROM session ORDER BY sid DESC LIMIT 1"
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "No sessions found" });
+    res.json({ sid: rows[0].sid });
+  } catch (error) {
+    console.error("❌ Error fetching latest session ID:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ------------------------- USER & DATA ROUTE ------------------------- */
+app.get('/data', async (req, res) => {
+  const inputSid = req.query.sid ? parseInt(req.query.sid) : null;
+  console.log("📥 Fetching data for session ID:", inputSid);
+
+  try {
+    // Determine active session
     let latestSid = inputSid;
-    if (inputSid == null || inputSid === 0) {
+    if (!latestSid || latestSid === 0) {
       const [rows] = await db.promise().query(
         'SELECT sid FROM session ORDER BY sid DESC LIMIT 1'
       );
-      if (rows.length > 0) {
-        latestSid = rows[0].sid;
-        console.log('[/Data--] Active session loaded. SID =', latestSid);
-      } else {
-        console.error('[/Data] No session found. Please insert at least one session.');
+      if (rows.length > 0) latestSid = rows[0].sid;
+      else {
+        console.error('[/Data] No session found.');
         return res.json([]);
       }
     }
-    console.log("📥 Changed session ID:", latestSid);
-    if (!latestSid) return res.json([]);
 
+    // Get all unique users for this session
     const [userIds] = await db.promise().query(
       'SELECT DISTINCT uid FROM user WHERE sid = ?',
       [latestSid]
     );
-
     if (userIds.length === 0) return res.json([]);
 
+    // Fetch user data
     const userData = await Promise.all(
       userIds.map(async ({ uid }) => {
-        const [[user]] = await db.promise().query(
-          'SELECT * FROM user WHERE uid = ?',
-          [uid]
+        const [[userRow]] = await db.promise().query(
+          'SELECT uname FROM user WHERE uid = ? AND sid = ?',
+          [uid, latestSid]
         );
+        const usernameSafe = userRow?.uname || 'Unknown';
 
         const [gps] = await db.promise().query(
           'SELECT lat, lng, currentTime AS time FROM gps WHERE uid = ? AND sid = ?',
           [uid, latestSid]
         );
-
         const [u2b] = await db.promise().query(
           'SELECT message AS text, currentTime AS time FROM u2b WHERE uid = ? AND sid = ?',
           [uid, latestSid]
         );
-
         const [b2u] = await db.promise().query(
           'SELECT message AS text, currentTime AS time FROM b2u WHERE uid = ? AND sid = ?',
           [uid, latestSid]
@@ -112,88 +113,37 @@ app.get('/data', async (req, res) => {
         const toTimestamp = (t) => t ? new Date(t).getTime() : Date.now();
 
         return {
-          userId: `${user.uid}`,
-          username: user.uname || `User ${user.uid}`,
-          gps: gps.map((g) => ({
-            lat: g.lat,
-            lng: g.lng,
-            timestamp: toTimestamp(g.time),
-          })),
-          u2b: u2b.map((m) => ({
-            text: m.text,
-            timestamp: toTimestamp(m.time),
-          })),
-          b2u: b2u.map((m) => ({
-            text: m.text,
-            timestamp: toTimestamp(m.time),
-          })),
+          userId: `${uid}`,
+          username: usernameSafe,
+          gps: gps.map(g => ({ lat: g.lat, lng: g.lng, timestamp: toTimestamp(g.time) })),
+          u2b: u2b.map(m => ({ text: m.text, timestamp: toTimestamp(m.time) })),
+          b2u: b2u.map(m => ({ text: m.text, timestamp: toTimestamp(m.time) })),
         };
       })
     );
 
     res.json(userData);
-    console.log('📤 Data sent successfully:' + latestSid);
+    console.log('📤 Data sent successfully for SID:', latestSid);
   } catch (err) {
-    console.error('❌ Error fetching filtered session data:', err);
+    console.error('❌ Error in /data route:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// ✅ Get latest session ID
-app.get("/api/session/latest", async (req, res) => {
-  try {
-    const [rows] = await db.promise().query(
-      "SELECT sid FROM session ORDER BY sid DESC LIMIT 1"
-    );
-    if (rows.length === 0) {
-      return res.status(404).json({ error: "No sessions found" });
-    }
-    res.json({ sid: rows[0].sid });
-  } catch (error) {
-    console.error("❌ Error fetching latest session ID:", error);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/* -------------------------------------------------------------------------- */
-/*                                CHAT ROUTES                                 */
-/* -------------------------------------------------------------------------- */
-
-// ✅ Fetch merged chat (u2b + b2u) messages by UID
+/* ------------------------- CHAT ROUTES ------------------------- */
+// Fetch merged chat
 app.get('/chat/:uid/:sid', async (req, res) => {
-  const uid = req.params.uid;
-  const inputSid = req.params.sid;
-  let latestSid = inputSid;
-  // let latestSid = inputSid;
-  // if (inputSid == null || inputSid === 0) {
-  //   const [rows] = await db.promise().query(
-  //     'SELECT sid FROM session ORDER BY sid DESC LIMIT 1'
-  //   );
-  //   if (rows.length > 0) {
-  //     latestSid = rows[0].sid;
-  //     console.log('[/Data--] Active session loaded. SID =', latestSid);
-  //   } else {
-  //     console.error('[/Data] No session found. Please insert at least one session.');
-  //     return res.json([]);
-  //   }
-  // }
-  console.log("📥--------------------- Fetching chat for UID:", uid, "SID:", inputSid);
+  const { uid, sid } = req.params;
+  let latestSid = sid;
   try {
-    latestSid = inputSid;
-    if (inputSid == null || inputSid == 0) {
+    if (!latestSid || latestSid == 0) {
       const [rows] = await db.promise().query(
         'SELECT sid FROM session ORDER BY sid DESC LIMIT 1'
       );
-      if (rows.length > 0) {
-        latestSid = rows[0].sid;
-        // console.log('[/Data--] Active session loaded. SID =', latestSid);
-        console.log("📥------Changed--------------- Fetching chat for UID:", uid, "SID:", latestSid);
-
-      } else {
-        console.error('[/Data] No session found. Please insert at least one session.');
-        return res.json([]);
-      }
+      if (rows.length > 0) latestSid = rows[0].sid;
+      else return res.json([]);
     }
+
     const [rows] = await db.promise().query(
       `
       SELECT message, currentTime AS time, 'u2b' AS sender FROM u2b WHERE uid = ? AND sid = ?
@@ -204,7 +154,7 @@ app.get('/chat/:uid/:sid', async (req, res) => {
       [uid, latestSid, uid, latestSid]
     );
 
-    const messages = rows.map((m) => ({
+    const messages = rows.map(m => ({
       text: m.message,
       timestamp: m.time,
       sender: m.sender
@@ -216,90 +166,58 @@ app.get('/chat/:uid/:sid', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch chat messages' });
   }
 });
-/*app.get('/chat/:uid', async (req, res) => {
-  const uid = req.params.uid;
-  const sid = req.query.sid ? parseInt(req.query.sid) : null;
 
-  if (!sid) {
-    return res.status(400).json({ error: 'Session ID (sid) query parameter is required' });
-  }
-
-  try {
-    const [rows] = await db.promise().query(
-      `
-      SELECT message, currentTime AS time, 'u2b' AS sender FROM u2b WHERE uid = ? AND sid = ?
-      UNION
-      SELECT message, currentTime AS time, 'b2u' AS sender FROM b2u WHERE uid = ? AND sid = ?
-      ORDER BY time ASC
-      `,
-      [uid, sid, uid, sid]
-    );
-
-    const messages = rows.map((m) => ({
-      text: m.message,
-      timestamp: m.time,
-      sender: m.sender
-    }));
-
-    res.json(messages);
-  } catch (err) {
-    console.error('❌ Error fetching chat:', err);
-    res.status(500).json({ error: 'Failed to fetch chat messages' });
-  }
-});*/
-
-
-// ✅ Insert message into b2u table
+// Insert message into b2u table
 app.post('/b2u', async (req, res) => {
   const { uid, sid, message, type, pmsgId } = req.body;
-  const pid = null; // use null by default
-
-  console.log("📥 Incoming message to insert:", { uid, sid, message, type, pid });
+  const pid = null;
 
   try {
-    const [result] = await db.promise().query(
+    await db.promise().query(
       'INSERT INTO b2u (uid, currentTime, type, message, pid, sid) VALUES (?, NOW(), ?, ?, ?, ?)',
       [uid, type, message, pid, sid]
     );
 
-    console.log("✅ Insert successful:", result);
+    if (type === 'predefined') sendToESP32({ userId: uid, type: 'pmsg', data: pmsgId });
+    else if (type === 'custom') sendToESP32({ userId: uid, type: 'cmsg', data: message });
+
     res.json({ success: true });
-  } catch (error) {
-    console.error("❌ Error inserting into b2u:", error.message, error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-// {"userId": 77,"type": "pmsg","data": 12}
-// {"userId": 77,"type": "cmsg","data": "Hi man raju"}
-  if(type === 'predefined') {
-    console.log("📥 Predefined message detected, sending to ESP32...");
-    sendToESP32({userId:uid,type: 'pmsg', data: pmsgId});
-  }
-  else if (type === 'custom') {
-    sendToESP32({userId:uid,type: 'cmsg', data: message});
-    console.log("📥 Custom message detected, sending to ESP32...");
+  } catch (err) {
+    console.error("❌ Error inserting into b2u:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
-/* -------------------------------------------------------------------------- */
-/*                             ESP32 Message Route                            */
-/* -------------------------------------------------------------------------- */
-
-// ✅ Send message to ESP32 via Serial
-app.post('/send', (req, res) => {
-  const { message } = req.body;
-
-  if (!message) {
-    return res.status(400).json({ error: 'Message is required' });
+// Rename user
+app.post("/api/user/rename", async (req, res) => {
+  const { userId, newUsername, sid } = req.body;
+  if (!userId || !newUsername?.trim() || !sid) {
+    return res.status(400).json({ success: false, error: "User ID, session ID and new username are required" });
   }
 
+  try {
+    const [result] = await db.promise().query(
+      "UPDATE user SET uname = ? WHERE uid = ? AND sid = ?",
+      [newUsername.trim(), userId, sid]
+    );
+
+    if (result.affectedRows > 0) res.json({ success: true });
+    else res.json({ success: false, error: "User not found for this session" });
+  } catch (err) {
+    console.error("❌ Error renaming user:", err);
+    res.status(500).json({ success: false, error: "Internal server error" });
+  }
+});
+
+// Send message to ESP32
+app.post('/send', (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: 'Message is required' });
   sendToESP32(message);
   res.json({ success: true, sent: message });
 });
 
-/* -------------------------------------------------------------------------- */
-/*                                START SERVER                                */
-/* -------------------------------------------------------------------------- */
-
+// Start server
 app.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
 });

@@ -29,9 +29,10 @@ function SysInfo() {
   }, [updateStatus])
 
   return (
-    <div className="w-full bg-[#353535] p-4 rounded-xl shadow flex flex-col gap-4">
+    <div className="w-full bg-[#232222] p-2 rounded-xl shadow flex flex-col gap-2">
+      <hr className="border-gray-500 mb-4" />
       {/* ESP32 Status box */}
-      <div className="inline-flex items-center border-2 border-gray-400 rounded-lg px-4 py-2">
+      <div className="inline-flex items-center border-2 border-gray-400 rounded-lg px-2 py-2">
         <div
           className={`h-5 w-5 rounded-full ${
             isSerialConnected ? 'bg-green-500' : 'bg-red-500'
@@ -46,6 +47,7 @@ function SysInfo() {
 
       {/* Session selector below inside the same box */}
       <SessionSelector />
+      <hr className="border-gray-500 mt-4" />
     </div>
   )
 }

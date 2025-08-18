@@ -5,19 +5,22 @@ import UserPanel from './components/UserPanel';
 import ChatBox from './components/chatbox';
 import SessionSelector from './components/SessionSelector';
 import useUserStore from './stores/useUserStore';
+import logo from './assets/logo3.png';
 
 const App = () => {
-  const { users, fetchUsers, SID } = useUserStore();
+  const users = useUserStore((state) => state.users);
+  const fetchUsers = useUserStore((state) => state.fetchUsers);
+  const SID = useUserStore((state) => state.SID);
 
   const [highlightedUserId, setHighlightedUserId] = useState(null);
   const [selectedUserForChat, setSelectedUserForChat] = useState(null);
 
-  // Fetch users when SID changes, and poll every 2 seconds
   useEffect(() => {
-    fetchUsers();
-    const interval = setInterval(fetchUsers, 2000);
+    const fetch = () => fetchUsers();
+    fetch(); // initial fetch
+    const interval = setInterval(fetch, 1000); // ✅ poll DB every 1 second
     return () => clearInterval(interval);
-  }, [fetchUsers, SID]);
+  }, [SID, fetchUsers]);
 
   const handleUserSelect = (id) => {
     setHighlightedUserId(id);
@@ -29,10 +32,12 @@ const App = () => {
   };
 
   return (
-    <div className="bg-yellow-200 flex flex-1 h-screen w-full relative">
+    <div className="bg-[#232222] flex flex-1 h-screen w-full relative">
       {/* Left Panel */}
-      <div className="bg-[#353535] flex-1 overflow-y-auto">
-        
+      <div className="bg-[#232222] flex-1 overflow-y-auto w-full h-full rounded-2xl shadow-lg border border-green-900 p-1 space-y-1">
+        <div className="flex justify-center mb-2 mt-2">
+          <img src={logo} alt="Logo" className="h-20" />
+        </div>
         <SysInfo />
         <UserPanel
           highlightedUserId={highlightedUserId}
@@ -41,12 +46,19 @@ const App = () => {
       </div>
 
       {/* Map Panel */}
-      <div className="bg-green-200 flex flex-3 relative">
+      <div className="bg-[#232222] flex flex-3 relative border border-green-900 rounded-2xl shadow-lg">
         <Mapbox users={users} highlightedUserId={highlightedUserId} />
         {selectedUserForChat && (
           <div
-            className="absolute bottom-4 left-4 bg-white shadow-lg rounded-lg border border-gray-300"
-            style={{ width: '300px', height: '400px', zIndex: 50 }}
+            className="absolute bg-red shadow-lg rounded-2xl border border-green-900"
+            style={{
+              width: '300px',
+              height: '100%',
+              zIndex: 50,
+              marginLeft: '10px',
+              marginTop: '10px',
+              marginBottom: '10px'
+            }}
           >
             <ChatBox userId={selectedUserForChat} onClose={closeChat} />
           </div>

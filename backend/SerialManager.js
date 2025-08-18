@@ -27,7 +27,7 @@ async function getCurrentSessionId() {
   }
 }
 
-const SERIAL_PATH = 'COM5' // <- Update to match your ESP32 port
+const SERIAL_PATH = 'COM3' // <- Update to match your ESP32 port
 const BAUD_RATE = 115200
 
 function setupParser() {
