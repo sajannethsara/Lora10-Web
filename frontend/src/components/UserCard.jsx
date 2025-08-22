@@ -12,9 +12,9 @@ function UserCard({ user, onClick, isSelected }) {
       onClick={() => onClick(user.userId)}
       className={`flex rounded-lg p-1 m-2 cursor-pointer transition-shadow
         ${isSelected
-          ? 'border-2 border-green-400 bg-[#353535] shadow-md'
-          : 'border border-gray-700 bg-[#353535] shadow-sm'}
-        hover:shadow-lg hover:border-green-400 hover:bg-green-950
+          ? '  bg-[#353535] shadow-md'
+          : '  bg-[#232222] shadow-sm'}
+        hover:shadow-lg hover: hover:bg-[#555555] transition-all duration-200 ease-in-out
       `}
     >
       <div className='flex items-center justify-center'>
@@ -25,7 +25,7 @@ function UserCard({ user, onClick, isSelected }) {
 
       <div className="ml-4 flex flex-col justify-center">
         <p className="text-m text-white">
-          {user.username} <span className="text-green-400 self-end">: {user.userId}</span>
+          {user.username} <span className="text-[#1ae81a70] self-end">: {user.userId}</span>
         </p>
         <p className="text-sm text-green-200">
           {latestGps

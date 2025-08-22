@@ -17,7 +17,18 @@ const ChatBox = ({ userId, onClose }) => {
     "Where are you?",
     "Do you need help?",
     "Come to base now!",
-    "Turn on your tracker.",
+    "Take a break",
+    "Please respond ASAP.",
+    "Turn right, water is available.",
+    "Turn left, water is available.",
+    "Move forward, water is available.",
+    "Move backward, water is available.",
+    "Campsite Nearby",
+    "Turn on your device",
+    "Remain at current location",
+    "First aid arriving",
+    "Leave area immediately",
+    "Seek shelter quickly"
   ];
 
   // ✅ Fetch messages periodically
@@ -54,7 +65,7 @@ const ChatBox = ({ userId, onClose }) => {
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, [userId,sid]);
+  }, [userId, sid]);
 
   // ✅ Send message to backend
   const sendMessage = async (messageText, messageType = "custom", pmsgId) => {
@@ -64,11 +75,11 @@ const ChatBox = ({ userId, onClose }) => {
       const sid = sidData.sid;
       let mypmsgId = messageType === "predefined" ? pmsgId : null;
       const newMsg = {
-        uid:userId,
+        uid: userId,
         sid,
         message: messageText,
         type: messageType,
-        pmsgId:mypmsgId
+        pmsgId: mypmsgId
       };
 
       const res = await fetch("http://localhost:3000/b2u", {
@@ -100,13 +111,19 @@ const ChatBox = ({ userId, onClose }) => {
   // ✅ Trigger send for custom typed message
   const handleSend = () => {
     if (!input.trim()) return;
+
+    if (input.length > 39) {
+      alert("Message cannot exceed 39 characters!");
+      return; // ❌ stop sending
+    }
+
     sendMessage(input, "custom", null);
     setInput("");
   };
 
   // ✅ Trigger send for predefined message
-  const handlePredefined = (msg,pmsgId) => {
-    sendMessage(msg, "predefined",pmsgId);
+  const handlePredefined = (msg, pmsgId) => {
+    sendMessage(msg, "predefined", pmsgId);
   };
 
   // Rename handler
@@ -116,40 +133,40 @@ const ChatBox = ({ userId, onClose }) => {
   };
 
   const handleRenameSubmit = async (e) => {
-  e.preventDefault();
-  if (!newUsername.trim()) return;
-  setRenaming(true);
+    e.preventDefault();
+    if (!newUsername.trim()) return;
+    setRenaming(true);
 
-  try {
-    const sid = useUserStore.getState().SID;
+    try {
+      const sid = useUserStore.getState().SID;
 
-    // 1️⃣ Update UI immediately
-    
+      // 1️⃣ Update UI immediately
 
-    // 2️⃣ Send rename request to backend
-    const res = await fetch(`http://localhost:3000/api/user/rename`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, newUsername, sid }),
-    });
 
-    const result = await res.json();
-    if (result.success) {
-      setRenameOpen(false);
-    } else {
-      alert("Rename failed: " + (result.error || "Unknown error"));
+      // 2️⃣ Send rename request to backend
+      const res = await fetch(`http://localhost:3000/api/user/rename`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, newUsername, sid }),
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        setRenameOpen(false);
+      } else {
+        alert("Rename failed: " + (result.error || "Unknown error"));
+      }
+    } catch (err) {
+      alert("Rename error: " + err.message);
     }
-  } catch (err) {
-    alert("Rename error: " + err.message);
-  }
 
-  setRenaming(false);
-};
+    setRenaming(false);
+  };
 
 
 
   return (
-    <div className={`flex flex-col h-[95vh] p-3 bg-[#353535] rounded-lg shadow-md relative`}>
+    <div className={`flex flex-col h-[95vh] p-3 bg-[#353535] rounded-lg shadow-md relative border border-green-700`}>
       {/* ---------- Header ---------- */}
       <div className="flex justify-between items-center border-b border-gray-200 pb-2">
         <button
@@ -181,11 +198,12 @@ const ChatBox = ({ userId, onClose }) => {
         {/* Hide scrollbar for Chrome, Safari and Opera */}
         <style>
           {`
-            .scrollbar-hide::-webkit-scrollbar {
-              display: none;
-            }
-          `}
+      .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+      }
+    `}
         </style>
+
         {messages.length === 0 ? (
           <p className="text-gray-400 text-center italic">No messages yet</p>
         ) : (
@@ -194,24 +212,24 @@ const ChatBox = ({ userId, onClose }) => {
             const isPredefined = isB2U && msg.type === "predefined";
 
             const bubbleStyle = isPredefined
-              ? "bg-green-100 border border-gray-300 text-gray-600 italic text-sm p-2"
+              ? "bg-green-100 border border-gray-300 text-gray-600 italic text-sm p-2 break-words transition-all duration-300"
               : isB2U
-              ? "bg-green-900 text-white p-3"
-              : "bg-gray-500 text-white self-start mr-auto rounded-bl-none p-3";
+                ? "bg-[#1ae81a70] text-white p-3 break-words transition-all duration-300"
+                : "bg-gray-500 text-white self-start mr-auto rounded-bl-none p-3 break-words transition-all duration-300";
 
             return (
               <div
                 key={i}
-                className={`max-w-[75%] rounded-2xl shadow-sm ${
-                  isB2U ? "self-end ml-auto rounded-br-none" : ""
-                } ${bubbleStyle}`}
+                className={`max-w-[75%] rounded-2xl shadow-sm ${isB2U ? "self-end ml-auto rounded-br-none" : ""} ${bubbleStyle}`}
               >
                 {isPredefined && (
                   <div className="text-[10px] font-semibold text-gray-500 mb-1">
                     Predefined
                   </div>
                 )}
-                <div>{msg.text}</div>
+                <div className="break-words whitespace-pre-wrap">
+                  {msg.text}
+                </div>
                 <div className="text-[10px] text-right text-gray-200 mt-1">
                   {msg.time}
                 </div>
@@ -221,26 +239,59 @@ const ChatBox = ({ userId, onClose }) => {
         )}
       </div>
 
+
+
       {/* ---------- Predefined Message Menu ---------- */}
-      <div className="flex overflow-x-auto gap-2 mt-3 pb-2 scrollbar-none" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-        {/* Hide scrollbar for Chrome, Safari and Opera */}
-        <style>
-          {`
-            .scrollbar-none::-webkit-scrollbar {
-              display: none;
-            }
-          `}
-        </style>
-        {predefinedMessages.map((msg, idx) => (
-          <button
-            key={idx}
-            onClick={() => handlePredefined(msg,idx)}
-            className="bg-green-200 border border-gray-300 text-gray-700 text-sm px-2 py-1 rounded hover:bg-gray-200 whitespace-nowrap"
-          >
-            {msg}
-          </button>
-        ))}
+      <div className="flex flex-col gap-2 mt-3 pb-2">
+        {/* Row 1 */}
+        <div
+          className="flex overflow-x-auto gap-2 scrollbar-none"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
+          <style>
+            {`
+        .scrollbar-none::-webkit-scrollbar {
+          display: none;
+        }
+      `}
+          </style>
+
+          {predefinedMessages
+            .slice(0, Math.ceil(predefinedMessages.length / 2))
+            .map((msg, idx) => (
+              <button
+                key={idx}
+                onClick={() => handlePredefined(msg, idx)}
+                className="bg-green-200 border border-gray-300 text-gray-700 text-sm px-2 py-1 rounded hover:bg-gray-200 whitespace-nowrap"
+              >
+                {msg}
+              </button>
+            ))}
+        </div>
+
+        {/* Row 2 */}
+        <div
+          className="flex overflow-x-auto gap-2 scrollbar-none"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
+          {predefinedMessages
+            .slice(Math.ceil(predefinedMessages.length / 2))
+            .map((msg, idx) => (
+              <button
+                key={idx + Math.ceil(predefinedMessages.length / 2)}
+                onClick={() =>
+                  handlePredefined(msg, idx + Math.ceil(predefinedMessages.length / 2))
+                }
+                className="bg-green-200 border border-gray-300 text-gray-700 text-sm px-2 py-1 rounded hover:bg-gray-200 whitespace-nowrap"
+              >
+                {msg}
+              </button>
+            ))}
+        </div>
       </div>
+
+
+
 
       {/* Option B: Dropdown Menu (Optional, unused) */}
       {/*
@@ -280,11 +331,11 @@ const ChatBox = ({ userId, onClose }) => {
           onKeyDown={(e) => {
             if (e.key === "Enter") handleSend();
           }}
-          className="flex-1 p-2   bg-gray-600 text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 rounded"
+          className="flex-1 p-2   bg-[#555555] text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 rounded"
         />
         <button
           onClick={handleSend}
-          className="bg-green-900 hover:bg-gray-800 text-white px-4 rounded"
+          className="bg-[#1ae81a70] hover:bg-gray-800 text-white px-4 rounded"
         >
           <img className='h-8 w-12 justify-center' src={sendIMG} alt="" />
         </button>

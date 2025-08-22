@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import db from './db.js';
 import { getSerialStatus, sendToESP32 } from './SerialManager.js';
+import { createServer } from "http";
+import { Server } from "socket.io";
 
 const app = express();
 const port = 3000;
@@ -22,20 +24,18 @@ app.get('/status', (req, res) => {
 });
 
 /* ------------------------- SESSION ROUTES ------------------------- */
-// Get all session IDs
 app.get("/sessions", async (req, res) => {
   try {
     const [rows] = await db.promise().query(
       "SELECT sid FROM session ORDER BY sid ASC"
     );
-    res.json(rows); // [{ sid: 1 }, { sid: 2 }, ...]
+    res.json(rows);
   } catch (error) {
     console.error("❌ Error fetching sessions:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// Add new session
 app.post('/sessions', async (req, res) => {
   try {
     const [result] = await db.promise().query(
@@ -48,7 +48,6 @@ app.post('/sessions', async (req, res) => {
   }
 });
 
-// Get latest session ID
 app.get("/api/session/latest", async (req, res) => {
   try {
     const [rows] = await db.promise().query(
@@ -65,10 +64,9 @@ app.get("/api/session/latest", async (req, res) => {
 /* ------------------------- USER & DATA ROUTE ------------------------- */
 app.get('/data', async (req, res) => {
   const inputSid = req.query.sid ? parseInt(req.query.sid) : null;
-  console.log("📥 Fetching data for session ID:", inputSid);
+  // console.log("📥 Fetching data for session ID:", inputSid);
 
   try {
-    // Determine active session
     let latestSid = inputSid;
     if (!latestSid || latestSid === 0) {
       const [rows] = await db.promise().query(
@@ -81,14 +79,12 @@ app.get('/data', async (req, res) => {
       }
     }
 
-    // Get all unique users for this session
     const [userIds] = await db.promise().query(
       'SELECT DISTINCT uid FROM user WHERE sid = ?',
       [latestSid]
     );
     if (userIds.length === 0) return res.json([]);
 
-    // Fetch user data
     const userData = await Promise.all(
       userIds.map(async ({ uid }) => {
         const [[userRow]] = await db.promise().query(
@@ -123,7 +119,7 @@ app.get('/data', async (req, res) => {
     );
 
     res.json(userData);
-    console.log('📤 Data sent successfully for SID:', latestSid);
+    // console.log('📤 Data sent successfully for SID:', latestSid);
   } catch (err) {
     console.error('❌ Error in /data route:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -131,7 +127,6 @@ app.get('/data', async (req, res) => {
 });
 
 /* ------------------------- CHAT ROUTES ------------------------- */
-// Fetch merged chat
 app.get('/chat/:uid/:sid', async (req, res) => {
   const { uid, sid } = req.params;
   let latestSid = sid;
@@ -167,7 +162,6 @@ app.get('/chat/:uid/:sid', async (req, res) => {
   }
 });
 
-// Insert message into b2u table
 app.post('/b2u', async (req, res) => {
   const { uid, sid, message, type, pmsgId } = req.body;
   const pid = null;
@@ -178,8 +172,8 @@ app.post('/b2u', async (req, res) => {
       [uid, type, message, pid, sid]
     );
 
-    if (type === 'predefined') sendToESP32({ userId: uid, type: 'pmsg', data: pmsgId });
-    else if (type === 'custom') sendToESP32({ userId: uid, type: 'cmsg', data: message });
+    if (type === 'predefined') sendToESP32({ userId: parseInt(uid), type: 'pmsg', data: pmsgId });
+    else if (type === 'custom') sendToESP32({ userId: parseInt(uid), type: 'cmsg', data: message });
 
     res.json({ success: true });
   } catch (err) {
@@ -188,7 +182,6 @@ app.post('/b2u', async (req, res) => {
   }
 });
 
-// Rename user
 app.post("/api/user/rename", async (req, res) => {
   const { userId, newUsername, sid } = req.body;
   if (!userId || !newUsername?.trim() || !sid) {
@@ -209,7 +202,6 @@ app.post("/api/user/rename", async (req, res) => {
   }
 });
 
-// Send message to ESP32
 app.post('/send', (req, res) => {
   const { message } = req.body;
   if (!message) return res.status(400).json({ error: 'Message is required' });
@@ -217,7 +209,34 @@ app.post('/send', (req, res) => {
   res.json({ success: true, sent: message });
 });
 
-// Start server
-app.listen(port, () => {
+/* ------------------------- SOCKET.IO SETUP ------------------------- */
+const httpServer = createServer(app);
+const io = new Server(httpServer, { cors: { origin: "*" } });
+
+io.on("connection", (socket) => {
+  console.log("✅ Frontend connected:", socket.id);
+});
+
+// Polling DB for new u2b rows
+let lastId = 0;
+setInterval(async () => {
+  try {
+    const [rows] = await db.promise().query(
+      "SELECT * FROM u2b ORDER BY u2bid DESC LIMIT 1"
+    );
+    if (rows.length > 0) {
+      const latest = rows[0];
+      if (latest.u2bid > lastId) {
+        lastId = latest.u2bid;
+        io.emit("newU2BMessage", latest);
+        console.log("📢 Sent notification for new U2B row:", latest);
+      }
+    }
+  } catch (err) {
+    console.error("❌ Error checking u2b:", err);
+  }
+}, 2000);
+
+httpServer.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
 });
