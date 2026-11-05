@@ -1,22 +1,22 @@
 import React, { useEffect, useRef, useState } from "react";
 import useUserStore from "../stores/useUserStore";
 
+// Base-to-User predefined messages matching C++ pmsgListForBase
 const predefinedMessages = [
-  { label: "Where are you?", id: 0 },
-  { label: "Do you need help?", id: 1 },
-  { label: "Come to base now!", id: 2 },
-  { label: "Take a break", id: 3 },
-  { label: "Please respond ASAP.", id: 4 },
-  { label: "Turn right, water available.", id: 5 },
-  { label: "Turn left, water available.", id: 6 },
-  { label: "Move forward, water available.", id: 7 },
-  { label: "Move backward, water available.", id: 8 },
-  { label: "Campsite Nearby", id: 9 },
-  { label: "Turn on your device", id: 10 },
-  { label: "Remain at current location", id: 11 },
-  { label: "First aid arriving", id: 12 },
-  { label: "Leave area immediately", id: 13 },
-  { label: "Seek shelter quickly", id: 14 },
+  { label: "Do you need help?", id: 0 },
+  { label: "Come to base now!", id: 1 },
+  { label: "Take a break", id: 2 },
+  { label: "Please respond ASAP.", id: 3 },
+  { label: "Turn right, water is available.", id: 4 },
+  { label: "Turn left, water is available.", id: 5 },
+  { label: "Move forward, water is available.", id: 6 },
+  { label: "Move backward, water is available.", id: 7 },
+  { label: "Campsite Nearby", id: 8 },
+  { label: "Turn on your device", id: 9 },
+  { label: "Remain at current location", id: 10 },
+  { label: "First aid arriving", id: 11 },
+  { label: "Leave area immediately", id: 12 },
+  { label: "Seek shelter quickly", id: 13 },
 ];
 
 const ChatBox = ({ userId, onClose }) => {

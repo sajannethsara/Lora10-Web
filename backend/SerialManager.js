@@ -27,6 +27,44 @@ async function getCurrentSessionId() {
   }
 }
 
+export const pmsgListForUser = [
+  "Okay",                     // 0
+  "Yes",                      // 1
+  "No",                       // 2
+  "Need help",                // 3
+  "All good",                 // 4
+  "No GPS signal",            // 5
+  "Reached checkpoint",       // 6
+  "Started hike",             // 7
+  "Taking a break",           // 8
+  "Low battery",              // 9
+  "Lost, need directions",    // 10
+  "Injured, need assistance", // 11
+  "Returning to base",        // 12
+  "Reached destination",      // 13
+  "Wild animal sighted",      // 14
+  "Rain started",             // 15
+  "Too dark to proceed",      // 16
+  "Slow progress",            // 17
+];
+
+export const pmsgListForBase = [
+  "Do you need help?",                  // 0
+  "Come to base now!",                  // 1
+  "Take a break",                       // 2
+  "Please respond ASAP.",               // 3
+  "Turn right, water is available.",    // 4
+  "Turn left, water is available.",     // 5
+  "Move forward, water is available.",  // 6
+  "Move backward, water is available.", // 7
+  "Campsite Nearby",                    // 8
+  "Turn on your device",                // 9
+  "Remain at current location",         // 10
+  "First aid arriving",                 // 11
+  "Leave area immediately",             // 12
+  "Seek shelter quickly"                // 13
+];
+
 const SERIAL_PATH = 'COM11' // <- Update to match your ESP32 port
 const BAUD_RATE = 115200
 
@@ -93,48 +131,31 @@ function setupParser() {
       const direction = payloadObject.dir ?? 0;
 
       if (type === 0) {
-
         // ✅ Predefined message
         const pmsgid = payloadObject.data?.pmsgid ?? null;
-        // Define your predefined messages in an array
-        const predefinedMessages = [
-          "Reached checkpoint",        // 0
-          "started hike",              // 1
-          "Taking a break",            // 2
-          "low battery",               // 3
-          "need help",                 // 4
-          "Lost, need directions",     // 5
-          "injured, need assistance",  // 6
-          "returning to base",         // 7
-          "reached destination",       // 8
-          "wild animal sighted",       // 9
-          "rain started",              // 10
-          "too dark to proceed",       // 11
-          "all good",                  // 12
-          "slow progress",             // 13
-          "no GPS signal"              // 14
-        ];
+        const isUserToBase = direction === 1;
 
-        // Get message from array
-        let msg = predefinedMessages[pmsgid] ?? null;
+        // Use pmsgListForUser when dir=1 (U2B), pmsgListForBase when dir=0 (B2U)
+        const msgList = isUserToBase ? pmsgListForUser : pmsgListForBase;
+        let msg = pmsgid !== null && pmsgid !== undefined ? msgList[pmsgid] ?? null : null;
 
         if (!msg) {
-          console.warn(`[DB] Unknown predefined message ID: ${pmsgid}`);
+          console.warn(`[DB] Unknown predefined message ID: ${pmsgid} (dir=${direction})`);
+          msg = `Predefined-${pmsgid}`;
         }
 
-
-        if (direction === 1) {
+        if (isUserToBase) {
           await db.promise().query(
-            'INSERT INTO u2b (uid, sid, pid, message, currentTime,type) VALUES (?, ?, ?, ?, ?, ?)',
+            'INSERT INTO u2b (uid, sid, pid, message, currentTime, type) VALUES (?, ?, ?, ?, ?, ?)',
             [uid, currentSessionId, pid, msg, currentTime, 'predefined']
           );
-          console.log(`[DB] Inserted predefined msg into u2b (uid=${uid})`);
+          console.log(`[DB] Inserted predefined msg into u2b (uid=${uid}): "${msg}"`);
         } else {
           await db.promise().query(
-            'INSERT INTO b2u (uid, sid, pid, message, currentTime,type) VALUES (?, ?, ?, ?, ?, ?)',
+            'INSERT INTO b2u (uid, sid, pid, message, currentTime, type) VALUES (?, ?, ?, ?, ?, ?)',
             [uid, currentSessionId, pid, msg, currentTime, 'predefined']
           );
-          console.log(`[DB] Inserted predefined msg into b2u (uid=${uid})`);
+          console.log(`[DB] Inserted predefined msg into b2u (uid=${uid}): "${msg}"`);
         }
       } else if (type === 1) {
 
