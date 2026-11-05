@@ -231,15 +231,50 @@ app.post('/b2u', async (req, res) => {
   const pid = null;
 
   try {
+    // 1️⃣ Resolve effective session ID
+    let targetSid = sid ? parseInt(sid) : null;
+    if (!targetSid || targetSid === 0) {
+      const [latestSession] = await db.promise().query(
+        'SELECT sid FROM session ORDER BY sid DESC LIMIT 1'
+      );
+      if (latestSession.length > 0) {
+        targetSid = latestSession[0].sid;
+      } else {
+        return res.status(400).json({ success: false, error: 'No active session found.' });
+      }
+    }
+
+    // 2️⃣ Ensure user exists for (uid, targetSid) so foreign key constraint fk_b2u_uid_sid is satisfied
+    const [existingUser] = await db.promise().query(
+      'SELECT uid FROM user WHERE uid = ? AND sid = ?',
+      [uid, targetSid]
+    );
+
+    if (existingUser.length === 0) {
+      // Look up previous username if registered in another session, or default to User-{uid}
+      const [prevUser] = await db.promise().query(
+        'SELECT uname FROM user WHERE uid = ? ORDER BY sid DESC LIMIT 1',
+        [uid]
+      );
+      const uname = prevUser.length > 0 && prevUser[0].uname ? prevUser[0].uname : `User-${uid}`;
+
+      await db.promise().query(
+        'INSERT INTO user (uid, uname, sid) VALUES (?, ?, ?)',
+        [uid, uname, targetSid]
+      );
+      console.log(`[DB] Auto-registered user ${uid} (${uname}) in session ${targetSid} for outgoing message`);
+    }
+
+    // 3️⃣ Insert outgoing base-to-user message
     await db.promise().query(
       'INSERT INTO b2u (uid, currentTime, type, message, pid, sid) VALUES (?, NOW(), ?, ?, ?, ?)',
-      [uid, type, message, pid, sid]
+      [uid, type, message, pid, targetSid]
     );
 
     if (type === 'predefined') sendToESP32({ userId: parseInt(uid), type: 'pmsg', data: pmsgId });
     else if (type === 'custom') sendToESP32({ userId: parseInt(uid), type: 'cmsg', data: message });
 
-    res.json({ success: true });
+    res.json({ success: true, sid: targetSid });
   } catch (err) {
     console.error("❌ Error inserting into b2u:", err);
     res.status(500).json({ success: false, error: err.message });

@@ -68,16 +68,14 @@ const ChatBox = ({ userId, onClose }) => {
 
   const sendMessage = async (messageText, messageType = "custom", pmsgId) => {
     try {
-      const sidRes = await fetch("http://localhost:3001/api/session/latest");
-      const sidData = await sidRes.json();
-      const latestSid = sidData.sid;
+      const activeSid = sid || useUserStore.getState().SID;
 
       const res = await fetch("http://localhost:3001/b2u", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           uid: userId,
-          sid: latestSid,
+          sid: activeSid,
           message: messageText,
           type: messageType,
           pmsgId: messageType === "predefined" ? pmsgId : null,
@@ -95,6 +93,9 @@ const ChatBox = ({ userId, onClose }) => {
             type: messageType,
           },
         ]);
+      } else {
+        console.error("❌ Send failed:", result.error);
+        alert("Failed to send message: " + (result.error || "Unknown error"));
       }
     } catch (err) {
       console.error("Error sending message:", err);

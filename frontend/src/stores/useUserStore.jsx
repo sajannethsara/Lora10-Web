@@ -30,6 +30,14 @@ const useUserStore = create((set, get) => ({
       const res = await fetch('http://localhost:3001/sessions');
       const data = await res.json();
       set({ sessions: data });
+
+      // Automatically select the active / latest session on initial load
+      if (get().SID === 0 && Array.isArray(data) && data.length > 0) {
+        const latest = Math.max(...data.map((s) => s.sid));
+        if (latest) {
+          set({ SID: latest });
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch sessions:', err);
     }
