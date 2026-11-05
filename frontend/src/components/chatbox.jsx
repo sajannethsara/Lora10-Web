@@ -1,57 +1,60 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import useUserStore from "../stores/useUserStore";
-import sendIMG from '../assets/send.svg';
-import cancelIMG from '../assets/cancel.svg';
-import close from '../assets/closeArrow.svg';
-import rename from '../assets/rename.svg';
+
+const predefinedMessages = [
+  { label: "Where are you?", id: 0 },
+  { label: "Do you need help?", id: 1 },
+  { label: "Come to base now!", id: 2 },
+  { label: "Take a break", id: 3 },
+  { label: "Please respond ASAP.", id: 4 },
+  { label: "Turn right, water available.", id: 5 },
+  { label: "Turn left, water available.", id: 6 },
+  { label: "Move forward, water available.", id: 7 },
+  { label: "Move backward, water available.", id: 8 },
+  { label: "Campsite Nearby", id: 9 },
+  { label: "Turn on your device", id: 10 },
+  { label: "Remain at current location", id: 11 },
+  { label: "First aid arriving", id: 12 },
+  { label: "Leave area immediately", id: 13 },
+  { label: "Seek shelter quickly", id: 14 },
+];
 
 const ChatBox = ({ userId, onClose }) => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-  const [menuOpen, setMenuOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [newUsername, setNewUsername] = useState("");
   const [renaming, setRenaming] = useState(false);
   const sid = useUserStore((state) => state.SID);
-  const predefinedMessages = [
-    "Where are you?",
-    "Do you need help?",
-    "Come to base now!",
-    "Take a break",
-    "Please respond ASAP.",
-    "Turn right, water is available.",
-    "Turn left, water is available.",
-    "Move forward, water is available.",
-    "Move backward, water is available.",
-    "Campsite Nearby",
-    "Turn on your device",
-    "Remain at current location",
-    "First aid arriving",
-    "Leave area immediately",
-    "Seek shelter quickly"
-  ];
+  const users = useUserStore((state) => state.users);
+  const messagesEndRef = useRef(null);
 
-  // ✅ Fetch messages periodically
+  const currentUser = users.find((u) => u.userId === userId);
+  const displayName = currentUser?.username || `User ${userId}`;
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Fetch messages
   useEffect(() => {
     if (!userId) return;
-
     let isMounted = true;
 
     const fetchMessages = async () => {
       try {
-        const res = await fetch(`http://localhost:3000/chat/${userId}/${sid}`);
+        const res = await fetch(`http://localhost:3001/chat/${userId}/${sid}`);
         const data = await res.json();
-        console.log("📥 Fetched messages:", data);
         if (!isMounted) return;
-
-        const formatted = data.map((msg) => ({
-          text: msg.text,
-          time: new Date(msg.timestamp).toLocaleTimeString(),
-          direction: msg.sender,
-          type: msg.type || null,
-        }));
-
-        setMessages(formatted);
+        setMessages(
+          data.map((msg) => ({
+            text: msg.text,
+            time: new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            direction: msg.sender,
+            type: msg.type || null,
+          }))
+        );
       } catch (err) {
         console.error("Error fetching messages:", err);
         if (isMounted) setMessages([]);
@@ -60,327 +63,222 @@ const ChatBox = ({ userId, onClose }) => {
 
     fetchMessages();
     const intervalId = setInterval(fetchMessages, 3000);
-
-    return () => {
-      isMounted = false;
-      clearInterval(intervalId);
-    };
+    return () => { isMounted = false; clearInterval(intervalId); };
   }, [userId, sid]);
 
-  // ✅ Send message to backend
   const sendMessage = async (messageText, messageType = "custom", pmsgId) => {
     try {
-      const sidRes = await fetch("http://localhost:3000/api/session/latest");
+      const sidRes = await fetch("http://localhost:3001/api/session/latest");
       const sidData = await sidRes.json();
-      const sid = sidData.sid;
-      let mypmsgId = messageType === "predefined" ? pmsgId : null;
-      const newMsg = {
-        uid: userId,
-        sid,
-        message: messageText,
-        type: messageType,
-        pmsgId: mypmsgId
-      };
+      const latestSid = sidData.sid;
 
-      const res = await fetch("http://localhost:3000/b2u", {
+      const res = await fetch("http://localhost:3001/b2u", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newMsg),
+        body: JSON.stringify({
+          uid: userId,
+          sid: latestSid,
+          message: messageText,
+          type: messageType,
+          pmsgId: messageType === "predefined" ? pmsgId : null,
+        }),
       });
 
       const result = await res.json();
-
       if (result.success) {
         setMessages((prev) => [
           ...prev,
           {
             text: messageText,
-            time: new Date().toLocaleTimeString(),
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             direction: "b2u",
             type: messageType,
           },
         ]);
-      } else {
-        console.error("❌ Backend insert failed:", result.error);
       }
     } catch (err) {
-      console.error("❌ Error sending message to backend:", err);
+      console.error("Error sending message:", err);
     }
   };
 
-  // ✅ Trigger send for custom typed message
   const handleSend = () => {
     if (!input.trim()) return;
-
-    if (input.length > 39) {
-      alert("Message cannot exceed 39 characters!");
-      return; // ❌ stop sending
-    }
-
+    if (input.length > 39) { alert("Max 39 characters!"); return; }
     sendMessage(input, "custom", null);
     setInput("");
-  };
-
-  // ✅ Trigger send for predefined message
-  const handlePredefined = (msg, pmsgId) => {
-    sendMessage(msg, "predefined", pmsgId);
-  };
-
-  // Rename handler
-  const handleRename = () => {
-    setRenameOpen(true);
-    setNewUsername("");
   };
 
   const handleRenameSubmit = async (e) => {
     e.preventDefault();
     if (!newUsername.trim()) return;
     setRenaming(true);
-
     try {
-      const sid = useUserStore.getState().SID;
-
-      // 1️⃣ Update UI immediately
-
-
-      // 2️⃣ Send rename request to backend
-      const res = await fetch(`http://localhost:3000/api/user/rename`, {
+      const res = await fetch("http://localhost:3001/api/user/rename", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, newUsername, sid }),
+        body: JSON.stringify({ userId, newUsername, sid: useUserStore.getState().SID }),
       });
-
       const result = await res.json();
-      if (result.success) {
-        setRenameOpen(false);
-      } else {
-        alert("Rename failed: " + (result.error || "Unknown error"));
-      }
+      if (result.success) setRenameOpen(false);
+      else alert("Rename failed: " + (result.error || "Unknown error"));
     } catch (err) {
       alert("Rename error: " + err.message);
     }
-
     setRenaming(false);
   };
 
-
-
   return (
-    <div className={`flex flex-col h-[95vh] p-3 bg-[#353535] rounded-lg shadow-md relative border border-green-700`}>
-      {/* ---------- Header ---------- */}
-      <div className="flex justify-between items-center border-b border-gray-200 pb-2">
+    <div className="flex flex-col h-full bg-[#141720]/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5 flex-shrink-0">
         <button
           onClick={onClose}
-          className="text-gray-700 px-3 py-1 rounded-full hover:bg-green-950 hover:text-white transition-colors mr-2 w-10 h-10 flex items-center justify-center"
-          title="Close Chat"
+          className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-all"
+          title="Close"
         >
-          <img className='h-5 w-5 justify-center' src={close} alt="" />
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
         </button>
-        <div className="flex items-center gap-2">
-          <h4 className=" text-lg text-white">
-            Chat with user@{userId}
-          </h4>
-          <button
-            onClick={handleRename}
-            className="text-gray-700 px-3 py-1 rounded-full hover:bg-green-950 hover:text-white transition-colors w-10 h-10 flex items-center justify-center"
-            title="Rename User"
-          >
-            <img className='h-6 w-6 justify-center' src={rename} alt="" />
-          </button>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white truncate">{displayName}</p>
+          <p className="text-[11px] text-gray-500">ID #{userId}</p>
         </div>
+
+        <button
+          onClick={() => { setRenameOpen(true); setNewUsername(""); }}
+          className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-all"
+          title="Rename user"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+        </button>
       </div>
 
-      {/* ---------- Messages ---------- */}
+      {/* Messages */}
       <div
-        className="flex-1 overflow-y-auto overflow-x-hidden rounded bg-[#353535] shadow-inner space-y-2 m-2 p-0.5 scrollbar-hide"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        className="flex-1 overflow-y-auto px-3 py-3 space-y-2"
+        style={{ scrollbarWidth: "none" }}
       >
-        {/* Hide scrollbar for Chrome, Safari and Opera */}
-        <style>
-          {`
-      .scrollbar-hide::-webkit-scrollbar {
-        display: none;
-      }
-    `}
-        </style>
-
         {messages.length === 0 ? (
-          <p className="text-gray-400 text-center italic">No messages yet</p>
+          <div className="flex flex-col items-center justify-center h-full gap-2 opacity-50">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <p className="text-xs text-gray-600">No messages yet</p>
+          </div>
         ) : (
           messages.map((msg, i) => {
             const isB2U = msg.direction === "b2u";
             const isPredefined = isB2U && msg.type === "predefined";
 
-            const bubbleStyle = isPredefined
-              ? "bg-green-100 border border-gray-300 text-gray-600 italic text-sm p-2 break-words transition-all duration-300"
-              : isB2U
-                ? "bg-[#1ae81a70] text-white p-3 break-words transition-all duration-300"
-                : "bg-gray-500 text-white self-start mr-auto rounded-bl-none p-3 break-words transition-all duration-300";
-
             return (
-              <div
-                key={i}
-                className={`max-w-[75%] rounded-2xl shadow-sm ${isB2U ? "self-end ml-auto rounded-br-none" : ""} ${bubbleStyle}`}
-              >
+              <div key={i} className={`flex flex-col ${isB2U ? "items-end" : "items-start"}`}>
                 {isPredefined && (
-                  <div className="text-[10px] font-semibold text-gray-500 mb-1">
+                  <span className="text-[9px] font-semibold text-gray-600 uppercase tracking-wide mb-0.5 px-1">
                     Predefined
-                  </div>
+                  </span>
                 )}
-                <div className="break-words whitespace-pre-wrap">
-                  {msg.text}
-                </div>
-                <div className="text-[10px] text-right text-gray-200 mt-1">
-                  {msg.time}
+                <div
+                  className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+                    isPredefined
+                      ? "bg-green-900/30 border border-green-700/40 text-green-200 italic"
+                      : isB2U
+                      ? "bg-green-600 text-white rounded-br-sm"
+                      : "bg-white/8 text-gray-200 rounded-bl-sm border border-white/5"
+                  }`}
+                >
+                  <p className="break-words leading-snug">{msg.text}</p>
+                  <p className={`text-[10px] mt-1 ${isB2U ? "text-green-200/70 text-right" : "text-gray-500"}`}>
+                    {msg.time}
+                  </p>
                 </div>
               </div>
             );
           })
         )}
+        <div ref={messagesEndRef} />
       </div>
 
-
-
-      {/* ---------- Predefined Message Menu ---------- */}
-      <div className="flex flex-col gap-2 mt-3 pb-2">
-        {/* Row 1 */}
+      {/* Quick messages */}
+      <div className="px-3 py-2 border-t border-white/5 flex-shrink-0">
         <div
-          className="flex overflow-x-auto gap-2 scrollbar-none"
-          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+          className="flex gap-1.5 overflow-x-auto pb-1"
+          style={{ scrollbarWidth: "none" }}
         >
-          <style>
-            {`
-        .scrollbar-none::-webkit-scrollbar {
-          display: none;
-        }
-      `}
-          </style>
-
-          {predefinedMessages
-            .slice(0, Math.ceil(predefinedMessages.length / 2))
-            .map((msg, idx) => (
-              <button
-                key={idx}
-                onClick={() => handlePredefined(msg, idx)}
-                className="bg-green-200 border border-gray-300 text-gray-700 text-sm px-2 py-1 rounded hover:bg-gray-200 whitespace-nowrap"
-              >
-                {msg}
-              </button>
-            ))}
-        </div>
-
-        {/* Row 2 */}
-        <div
-          className="flex overflow-x-auto gap-2 scrollbar-none"
-          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-        >
-          {predefinedMessages
-            .slice(Math.ceil(predefinedMessages.length / 2))
-            .map((msg, idx) => (
-              <button
-                key={idx + Math.ceil(predefinedMessages.length / 2)}
-                onClick={() =>
-                  handlePredefined(msg, idx + Math.ceil(predefinedMessages.length / 2))
-                }
-                className="bg-green-200 border border-gray-300 text-gray-700 text-sm px-2 py-1 rounded hover:bg-gray-200 whitespace-nowrap"
-              >
-                {msg}
-              </button>
-            ))}
+          {predefinedMessages.map((msg) => (
+            <button
+              key={msg.id}
+              onClick={() => sendMessage(msg.label, "predefined", msg.id)}
+              className="flex-shrink-0 text-[11px] px-2.5 py-1 rounded-full bg-white/5 hover:bg-green-900/50 border border-white/10 hover:border-green-700/50 text-gray-400 hover:text-green-300 transition-all whitespace-nowrap"
+            >
+              {msg.label}
+            </button>
+          ))}
         </div>
       </div>
 
-
-
-
-      {/* Option B: Dropdown Menu (Optional, unused) */}
-      {/*
-      <div className="mt-3 border-t pt-3 relative">
-        <button
-          onClick={() => setMenuOpen((prev) => !prev)}
-          className="bg-blue-600 text-white px-3 py-1 rounded"
-        >
-          Predefined Messages ▼
-        </button>
-        {menuOpen && (
-          <div className="absolute left-0 mt-1 bg-white border border-gray-300 rounded shadow max-w-xs z-10">
-            {predefinedMessages.map((msg, idx) => (
-              <button
-                key={idx}
-                onClick={() => {
-                  handlePredefined(msg);
-                  setMenuOpen(false);
-                }}
-                className="block w-full text-left px-4 py-2 hover:bg-blue-100"
-              >
-                {msg}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      */}
-
-      {/* ---------- Message Input ---------- */}
-      <div className="flex gap-2 mt-3">
+      {/* Input */}
+      <div className="flex gap-2 px-3 py-3 border-t border-white/5 flex-shrink-0">
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSend()}
           placeholder="Type a message..."
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleSend();
-          }}
-          className="flex-1 p-2   bg-[#555555] text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 rounded"
+          maxLength={39}
+          className="flex-1 bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-green-600/50 transition-all"
         />
         <button
           onClick={handleSend}
-          className="bg-[#1ae81a70] hover:bg-gray-800 text-white px-4 rounded"
+          disabled={!input.trim()}
+          className="p-2 px-3 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-all shadow-sm"
         >
-          <img className='h-8 w-12 justify-center' src={sendIMG} alt="" />
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+          </svg>
         </button>
       </div>
 
-      {/* ---------- Rename Modal ---------- */}
-      {
-        renameOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 ">
-            <form
-              onSubmit={handleRenameSubmit}
-              className="bg-white rounded-lg shadow-lg p-6 flex flex-col gap-4 min-w-[300px]"
-              style={{ zIndex: 1000 }}
-            >
-              <h2 className="text-lg font-semibold text-gray-800">Rename User</h2>
-              <input
-                type="text"
-                value={newUsername}
-                onChange={(e) => setNewUsername(e.target.value)}
-                placeholder="Enter new username"
-                className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-700"
+      {/* Rename Modal */}
+      {renameOpen && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded-2xl">
+          <form
+            onSubmit={handleRenameSubmit}
+            className="bg-[#1e2230] border border-white/10 rounded-2xl shadow-2xl p-6 flex flex-col gap-4 w-72"
+          >
+            <h2 className="text-base font-semibold text-white">Rename Unit</h2>
+            <input
+              type="text"
+              value={newUsername}
+              onChange={(e) => setNewUsername(e.target.value)}
+              placeholder="New name..."
+              className="bg-white/5 border border-white/10 text-white text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-green-600/50"
+              disabled={renaming}
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setRenameOpen(false)}
+                className="flex-1 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-sm transition-all"
                 disabled={renaming}
-                autoFocus
-              />
-              <div className="flex gap-2 justify-end">
-                <button
-                  type="button"
-                  onClick={() => setRenameOpen(false)}
-                  className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-700"
-                  disabled={renaming}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded bg-green-700 hover:bg-green-800 text-white"
-                  disabled={renaming}
-                >
-                  {renaming ? "Renaming..." : "Rename"}
-                </button>
-              </div>
-            </form>
-          </div>
-        )
-      }
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-medium transition-all"
+                disabled={renaming}
+              >
+                {renaming ? "Saving..." : "Rename"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };

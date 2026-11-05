@@ -1,2 +1,37 @@
+# Dependencies
 backend/node_modules/
 frontend/node_modules/
+
+# Environment files — NEVER commit secrets
+.env
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+backend/.env
+backend/.env.local
+
+# Build output — no need to commit dist
+frontend/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+backend/.env
+backend/.env.local
+
+# Build output — no need to commit dist
+frontend/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log

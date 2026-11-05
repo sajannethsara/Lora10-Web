@@ -14,7 +14,7 @@ const useUserStore = create((set, get) => ({
       const sid = get().SID;
       console.log("Fetching users for SID:", sid);
 
-      const res = await fetch(`http://localhost:3000/data?sid=${sid}`);
+      const res = await fetch(`http://localhost:3001/data?sid=${sid}`);
       const data = await res.json();
 
       console.log("DB data fetched:", data);
@@ -27,7 +27,7 @@ const useUserStore = create((set, get) => ({
   // 🔹 Fetch all sessions from DB
   fetchSessions: async () => {
     try {
-      const res = await fetch('http://localhost:3000/sessions');
+      const res = await fetch('http://localhost:3001/sessions');
       const data = await res.json();
       set({ sessions: data });
     } catch (err) {
@@ -38,7 +38,7 @@ const useUserStore = create((set, get) => ({
   // 🔹 Add a new session
   addSession: async () => {
     try {
-      const res = await fetch('http://localhost:3000/sessions', { method: 'POST' });
+      const res = await fetch('http://localhost:3001/sessions', { method: 'POST' });
       const data = await res.json();
 
       if (data.sid) {
@@ -47,6 +47,44 @@ const useUserStore = create((set, get) => ({
       }
     } catch (err) {
       console.error('❌ Failed to add session:', err);
+    }
+  },
+
+  // 🔹 End a session (mark as 'finish')
+  endSession: async (sid) => {
+    try {
+      const res = await fetch(`http://localhost:3001/sessions/${sid}/end`, {
+        method: 'PATCH',
+      });
+      const data = await res.json();
+      if (data.success) {
+        await get().fetchSessions(); // refresh session list to reflect new status
+      }
+      return data;
+    } catch (err) {
+      console.error('❌ Failed to end session:', err);
+      return { error: err.message };
+    }
+  },
+
+  // 🔹 End current session and immediately start a new one
+  endAndStartNew: async (sid) => {
+    try {
+      // End the current session
+      await fetch(`http://localhost:3001/sessions/${sid}/end`, { method: 'PATCH' });
+
+      // Create a new session
+      const res = await fetch('http://localhost:3001/sessions', { method: 'POST' });
+      const data = await res.json();
+
+      if (data.sid) {
+        set({ SID: data.sid });
+        await get().fetchSessions();
+        return { newSid: data.sid };
+      }
+    } catch (err) {
+      console.error('❌ Failed to end and start session:', err);
+      return { error: err.message };
     }
   },
 

@@ -6,7 +6,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 
 const app = express();
-const port = 3000;
+const port = 3001;
 
 // Middleware
 app.use(cors());
@@ -26,13 +26,52 @@ app.get('/status', (req, res) => {
 /* ------------------------- SESSION ROUTES ------------------------- */
 app.get("/sessions", async (req, res) => {
   try {
-    const [rows] = await db.promise().query(
-      "SELECT sid FROM session ORDER BY sid ASC"
-    );
+    // Fetch session metadata + compute last activity from gps/u2b/b2u tables
+    const [rows] = await db.promise().query(`
+      SELECT
+        s.sid,
+        s.dos AS startTime,
+        s.status,
+        s.doe AS endTime,
+        GREATEST(
+          COALESCE(MAX(g.currentTime), s.dos),
+          COALESCE(MAX(u.currentTime), s.dos),
+          COALESCE(MAX(b.currentTime), s.dos)
+        ) AS lastActivity
+      FROM session s
+      LEFT JOIN gps   g ON g.sid = s.sid
+      LEFT JOIN u2b   u ON u.sid = s.sid
+      LEFT JOIN b2u   b ON b.sid = s.sid
+      GROUP BY s.sid, s.dos, s.status, s.doe
+      ORDER BY s.sid ASC
+    `);
     res.json(rows);
   } catch (error) {
-    console.error("❌ Error fetching sessions:", error);
-    res.status(500).json({ error: "Server error" });
+    // Fallback: doe column may not exist yet — return without it
+    try {
+      const [rows] = await db.promise().query(`
+        SELECT
+          s.sid,
+          s.dos AS startTime,
+          s.status,
+          NULL AS endTime,
+          GREATEST(
+            COALESCE(MAX(g.currentTime), s.dos),
+            COALESCE(MAX(u.currentTime), s.dos),
+            COALESCE(MAX(b.currentTime), s.dos)
+          ) AS lastActivity
+        FROM session s
+        LEFT JOIN gps   g ON g.sid = s.sid
+        LEFT JOIN u2b   u ON u.sid = s.sid
+        LEFT JOIN b2u   b ON b.sid = s.sid
+        GROUP BY s.sid, s.dos, s.status
+        ORDER BY s.sid ASC
+      `);
+      res.json(rows);
+    } catch (err2) {
+      console.error("❌ Error fetching sessions:", err2);
+      res.status(500).json({ error: "Server error" });
+    }
   }
 });
 
@@ -45,6 +84,31 @@ app.post('/sessions', async (req, res) => {
   } catch (error) {
     console.error("❌ Error adding session:", error);
     res.status(500).json({ error: "Failed to add session" });
+  }
+});
+
+// End a session — mark status as 'finish', record end timestamp
+app.patch('/sessions/:sid/end', async (req, res) => {
+  const { sid } = req.params;
+  try {
+    // Add doe (date of end) column if it doesn't exist yet — safe to call every time
+    await db.promise().query(`
+      ALTER TABLE session
+      ADD COLUMN IF NOT EXISTS doe DATETIME DEFAULT NULL
+    `).catch(() => {}); // ignore if already exists or syntax unsupported
+
+    const [result] = await db.promise().query(
+      "UPDATE session SET status = 'finish', doe = NOW() WHERE sid = ? AND status = 'active'",
+      [sid]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(400).json({ error: 'Session not found or already finished' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error("❌ Error ending session:", error);
+    res.status(500).json({ error: "Failed to end session" });
   }
 });
 

@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import useSerialStore from '../stores/useSerialStore'
 import SessionSelector from './SessionSelector'
-import usb from '../assets/usb-white.svg'
 
 function SysInfo() {
   const isSerialConnected = useSerialStore((state) => state.isSerialConnected)
@@ -10,14 +9,10 @@ function SysInfo() {
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const res = await fetch('http://localhost:3000/status')
-        if (!res.ok) {
-          const errorText = await res.text()
-          throw new Error(`Failed to fetch: ${res.status} ${res.statusText} - ${errorText}`)
-        }
+        const res = await fetch('http://localhost:3001/status')
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         const status = await res.json()
         updateStatus(status)
-        console.log('Updating STATUS...')
       } catch (error) {
         console.error('Fetch error:', error.message)
       }
@@ -29,25 +24,28 @@ function SysInfo() {
   }, [updateStatus])
 
   return (
-    <div className="w-full bg-[#232222] p-2 rounded-xl shadow flex flex-col gap-2">
-      <hr className="border-gray-500 mb-4" />
-      {/* ESP32 Status box */}
-      <div className="inline-flex items-center border-2 border-gray-400 rounded-lg px-2 py-2">
-        <div
-          className={`h-5 w-5 rounded-full ${
-            isSerialConnected ? 'bg-green-500' : 'bg-red-500'
+    <div className="flex flex-col gap-3">
+      {/* Connection pill */}
+      <div
+        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-all duration-300 ${
+          isSerialConnected
+            ? 'bg-green-900/30 border-green-700/40 text-green-300'
+            : 'bg-red-900/30 border-red-700/40 text-red-300'
+        }`}
+      >
+        <span
+          className={`h-2 w-2 rounded-full flex-shrink-0 ${
+            isSerialConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'
           }`}
-          title={isSerialConnected ? 'Connected' : 'Not Connected'}
         />
-        <img className='ml-2' src={usb} alt="" height={20} width={20} />
-        <span className="ml-3 text-white whitespace-nowrap">
-          Base Station : {isSerialConnected ? 'Connected' : 'Not Connected'}
+        <span className="truncate">
+          Base Station &nbsp;·&nbsp;
+          {isSerialConnected ? 'Connected' : 'Disconnected'}
         </span>
       </div>
 
-      {/* Session selector below inside the same box */}
+      {/* Session selector */}
       <SessionSelector />
-      <hr className="border-gray-500 mt-4" />
     </div>
   )
 }

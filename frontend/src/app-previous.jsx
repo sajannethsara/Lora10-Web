@@ -16,7 +16,7 @@ const App = () => {
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const res = await fetch('http://localhost:3000/status');
+        const res = await fetch('http://localhost:3001/status');
         if (!res.ok) {
           const errorText = await res.text();
 
@@ -35,7 +35,7 @@ const App = () => {
     }
     const fetchUsers = async () => {
       try {
-        const res = await fetch('http://localhost:3000/data');
+        const res = await fetch('http://localhost:3001/data');
         if (!res.ok) {
           const errorText = await res.text();
           throw new Error(`Failed to fetch: ${res.status} ${res.statusText} - ${errorText}`);

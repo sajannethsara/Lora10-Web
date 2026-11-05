@@ -27,7 +27,7 @@ async function getCurrentSessionId() {
   }
 }
 
-const SERIAL_PATH = 'COM5' // <- Update to match your ESP32 port
+const SERIAL_PATH = 'COM11' // <- Update to match your ESP32 port
 const BAUD_RATE = 115200
 
 function setupParser() {
@@ -36,10 +36,15 @@ function setupParser() {
 
 
   parser.on('data', async (line) => {
-    console.log('[Serial] Received:', line);
+    const trimmedLine = line.trim()
+    console.log('[Serial] Received:', trimmedLine)
+
+    if (!trimmedLine.startsWith('{')) {
+      return
+    }
 
     try {
-      const payloadObject = JSON.parse(line);
+      const payloadObject = JSON.parse(trimmedLine);
       lastData = payloadObject;
 
       if (!currentSessionId) {
